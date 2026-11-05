@@ -1,12 +1,19 @@
-FROM maven:3-eclipse-temurin-17 AS mavenBuild
-COPY pom.xml /tmp/
-COPY src /tmp/src/
-WORKDIR /tmp/
-RUN mvn package
+# Build layer
+FROM mcr.microsoft.com/openjdk/jdk:25-ubuntu AS maven_build
 
-FROM mcr.microsoft.com/openjdk/jdk:17-ubuntu
-RUN mkdir /usr/local/example
-COPY --from=mavenBuild /tmp/target/*.jar /usr/local/example/example.jar
-COPY containers/start.sh /usr/local/example/start.sh
+    COPY pom.xml /tmp/
+    COPY src /tmp/src/
+    COPY mvnw /tmp/mvnw
+    COPY .mvn /tmp/.mvn
 
-CMD ["sh", "/usr/local/example/start.sh"]
+    WORKDIR /tmp/
+
+    RUN ./mvnw package && \
+        mkdir /staging
+
+# Runtime image
+FROM mcr.microsoft.com/openjdk/jdk:25-ubuntu
+
+    COPY --from=maven_build /tmp/target/*.jar /example.jar
+
+    CMD ["java", "-jar", "/example.jar"]

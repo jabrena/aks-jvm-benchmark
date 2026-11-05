@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadtest
+  labels:
+    app: loadtest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: loadtest
+  template:
+    metadata:
+      labels:
+        app: loadtest
+    spec:
+      nodeSelector:
+        "kubernetes.io/os": linux
+      containers:
+      - name: loadtest
+        image: javaland.azurecr.io/loadtest:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "4000m"
+            memory: "4Gi"
+        command: [ "/bin/bash", "-c", "--" ]
+        args: [ "while true; do sleep 30; done;" ]

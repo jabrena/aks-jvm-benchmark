@@ -1,6 +1,5 @@
 package examples.azure.aks.springboot;
 
-import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.management.ManagementFactory;
@@ -27,14 +26,14 @@ public class IdentifyCurrentGC {
         }
     }
 
-    private final Class VMOptionClazz, HotSpotDiagnosticMXBeanClazz;
+    private final Class<?> VMOptionClazz, HotSpotDiagnosticMXBeanClazz;
 
     public IdentifyCurrentGC() throws ClassNotFoundException {
         VMOptionClazz = Class.forName("com.sun.management.VMOption");
         HotSpotDiagnosticMXBeanClazz = Class.forName("com.sun.management.HotSpotDiagnosticMXBean");
     }
 
-    public GCType getCurrentGC() {
+    public GCType identifyGC() {
         try {
             var flags = Arrays.asList(GCType.values());
             var flagSettings = new TreeMap<GCType, String>();
@@ -50,9 +49,8 @@ public class IdentifyCurrentGC {
                     .findFirst()
                     .orElse(GCType.Unknown);
         } catch (Exception e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
-        return GCType.Unknown;
     }
 
     private String getVMOption(String vmOptionName) {
@@ -61,19 +59,17 @@ public class IdentifyCurrentGC {
         try {
             var publicLookup = MethodHandles.publicLookup();
             var mt = MethodType.methodType(VMOptionClazz, String.class);
-            MethodHandle getVMOption = publicLookup
-                    .findVirtual(HotSpotDiagnosticMXBeanClazz, "getVMOption", mt);
+            var getVMOption = publicLookup.findVirtual(HotSpotDiagnosticMXBeanClazz, "getVMOption", mt);
             var vmOption = getVMOption.invokeWithArguments(hotspotMBean, vmOptionName);
 
             var mt2 = MethodType.methodType(String.class);
             var mh2 = publicLookup.findVirtual(VMOptionClazz, "getValue", mt2);
             return (String) mh2.invokeWithArguments(vmOption);
         } catch (IllegalArgumentException e) {
-            return null;
-        } catch (RuntimeException re) {
-            throw re;
-        } catch (Exception exp) {
-            throw new RuntimeException(exp);
+            if (e.getMessage().contains("does not exist")) {
+                return null;
+            }
+            throw e;
         } catch (Throwable e) {
             throw new RuntimeException(e);
         }
@@ -83,12 +79,19 @@ public class IdentifyCurrentGC {
 
     private void initHotspotMBean() {
         if (hotspotMBean == null) {
-            synchronized (Controller.class) {
+            synchronized (IdentifyCurrentGC.class) {
                 if (hotspotMBean == null) {
                     hotspotMBean = getHotspotMBean();
                 }
             }
         }
+    }
+
+    // main
+    public static void main(String[] args) throws ClassNotFoundException {
+        IdentifyCurrentGC identifyCurrentGC = new IdentifyCurrentGC();
+        GCType gcType = identifyCurrentGC.identifyGC();
+        System.out.println("Current GC Type: " + gcType);
     }
 
 }
